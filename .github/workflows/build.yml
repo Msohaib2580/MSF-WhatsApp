@@ -21,15 +21,25 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Make Gradlew Executable
-        run: |
-          find . -name "gradlew" -exec chmod +x {} +
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Debug APK
+      - name: Locate Android Project Directory
+        id: locate-project
         run: |
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-          DIR_PATH=$(dirname "$GRADLEW_PATH")
-          cd "$DIR_PATH"
+          BUILD_FILE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
+          if [ -z "$BUILD_FILE" ]; then
+            echo "Error: No build.gradle file found!"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$BUILD_FILE")
+          echo "dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+
+      - name: Generate Wrapper and Build Debug APK
+        working-directory: ${{ steps.locate-project.outputs.dir }}
+        run: |
+          gradle wrapper
+          chmod +x gradlew
           ./gradlew assembleDebug --stacktrace --info
 
       - name: Upload APK Artifact
