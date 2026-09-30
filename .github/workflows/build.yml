@@ -17,45 +17,50 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Extract ZIP File
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Extract ZIP (if any)
         run: |
           ZIP=$(find . -iname "*.zip" -not -path "./.git/*" | head -n 1)
           if [ -n "$ZIP" ]; then
             echo "Found: $ZIP"
-            unzip -o "$ZIP" -d extracted
-          else
-            echo "No ZIP found"
+            unzip -oq "$ZIP" -d extracted
           fi
 
-      - name: Show Files
-        run: ls -R | head -60
-
-      - name: Locate Android Project
+      - name: Locate Flutter Project
         run: |
-          S=$(find . \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -not -path "./.git/*" | head -n 1)
-          if [ -z "$S" ]; then
-            echo "Error: Android project not found!"
+          P=$(find . -name pubspec.yaml -not -path "./.git/*" | head -n 1)
+          if [ -z "$P" ]; then
+            echo "Error: pubspec.yaml not found!"
+            ls -R | head -60
             exit 1
           fi
-          DIR=$(dirname "$S")
-          echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
-          echo "Project at: $DIR"
+          echo "PROJECT_DIR=$(dirname "$P")" >> $GITHUB_ENV
+          echo "Project at: $(dirname "$P")"
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Generate Android files
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          cp -r lib /tmp/lib_bak
+          flutter create --platforms=android --org com.msf --project-name msf_chatapp .
+          rm -rf lib && cp -r /tmp/lib_bak lib
+          rm -rf test
+          sed -i 's/flutter.minSdkVersion/23/' android/app/build.gradle*
+
+      - name: Get packages
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter pub get
 
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            gradle assembleDebug
-          fi
+        run: flutter build apk --debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-debug.apk
