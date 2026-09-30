@@ -55,6 +55,19 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
+      - name: Force compileSdk 36
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/force-sdk.gradle << 'EOF'
+          allprojects { p ->
+            p.afterEvaluate {
+              if (p.hasProperty('android')) {
+                p.android.compileSdkVersion(36)
+              }
+            }
+          }
+          EOF
+
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter build apk --debug
